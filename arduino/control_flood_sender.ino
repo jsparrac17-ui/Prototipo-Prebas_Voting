@@ -8,13 +8,11 @@ const uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 // Identificador único para este control (cámbialo en cada uno de los 5)
 const uint8_t DEVICE_ID = 101; // 101,102,103,104,105
 
-const uint8_t PRIMARY_CHANNEL = 6;
-const uint8_t SECONDARY_CHANNEL = 1;
-const bool DUAL_CHANNEL = true;
+const uint8_t WIFI_CHANNEL = 6;
 const uint16_t BURST_SIZE = 6;           // votos enviados en cada ráfaga
 const uint16_t INTERVALO_MS = 40;        // tiempo entre ráfagas
-const uint8_t BURSTS_ANTES_DE_PAUSA = 4; // tras este número de ráfagas hacemos una pausa extra
-const uint16_t PAUSA_ESCUCHA_MS = 200;   // ventana para que entren comandos STOP en congestión
+const uint8_t BURSTS_ANTES_DE_PAUSA = 8; // tras este número de ráfagas hacemos una pausa extra
+const uint16_t PAUSA_ESCUCHA_MS = 120;   // ventana para que entren comandos STOP en congestión
 
 bool flooding = false;
 unsigned long ultimaRafaga = 0;
@@ -62,15 +60,22 @@ uint8_t votoAleatorio() {
 }
 
 void enviarBurst() {
-  enviarBurstEnCanal(PRIMARY_CHANNEL);
-  if (DUAL_CHANNEL && SECONDARY_CHANNEL != PRIMARY_CHANNEL) {
-    enviarBurstEnCanal(SECONDARY_CHANNEL);
+  VotoPacket pkt;
+  pkt.controlId = DEVICE_ID;
+
+  for (uint16_t i = 0; i < BURST_SIZE; i++) {
+    pkt.voto = votoAleatorio();
+    esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&pkt, sizeof(pkt));
+    if (result != ESP_OK) {
+      Serial.printf("Error enviando voto %d: %d\n", i, result);
+    }
+    delay(2); // pequeño respiro para el radio
   }
 }
 
 void configESPNOW() {
   esp_wifi_set_promiscuous(true);
-  esp_wifi_set_channel(PRIMARY_CHANNEL, WIFI_SECOND_CHAN_NONE);
+  esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
   esp_wifi_set_promiscuous(false);
 
   if (esp_now_init() != ESP_OK) {
@@ -83,7 +88,7 @@ void configESPNOW() {
 
   esp_now_peer_info_t peer = {};
   memcpy(peer.peer_addr, broadcastAddress, 6);
-  peer.channel = PRIMARY_CHANNEL;
+  peer.channel = WIFI_CHANNEL;
   peer.encrypt = false;
 
   if (!esp_now_is_peer_exist(broadcastAddress)) {
@@ -91,27 +96,6 @@ void configESPNOW() {
     if (addStatus != ESP_OK) {
       Serial.printf("No se pudo agregar peer (%d)\n", addStatus);
     }
-  }
-}
-
-void fijarCanal(uint8_t canal) {
-  esp_wifi_set_promiscuous(true);
-  esp_wifi_set_channel(canal, WIFI_SECOND_CHAN_NONE);
-  esp_wifi_set_promiscuous(false);
-}
-
-void enviarBurstEnCanal(uint8_t canal) {
-  fijarCanal(canal);
-  VotoPacket pkt;
-  pkt.controlId = DEVICE_ID;
-
-  for (uint16_t i = 0; i < BURST_SIZE; i++) {
-    pkt.voto = votoAleatorio();
-    esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&pkt, sizeof(pkt));
-    if (result != ESP_OK) {
-      Serial.printf("Error enviando voto %d: %d\n", i, result);
-    }
-    delay(2); // pequeño respiro para el radio
   }
 }
 

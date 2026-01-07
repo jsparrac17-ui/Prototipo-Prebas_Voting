@@ -20,25 +20,10 @@ typedef struct __attribute__((packed)) {
   uint8_t cmd; // 1 = START, 0 = STOP
 } CommandPacket;
 
-bool aceptarVotos = false;
-bool stopBurstActivo = false;
-unsigned long stopBurstHasta = 0;
-unsigned long siguienteStopEnvio = 0;
-bool receptorEnSilencio = false;
-uint8_t canalActual = PRIMARY_CHANNEL;
-unsigned long siguienteCambioCanal = 0;
-
-const unsigned long STOP_BURST_MS = 900;
-const unsigned long STOP_INTERVALO_MS = 60;
-const unsigned long CHANNEL_SWITCH_MS = 120;
-
 // Callback: se ejecuta cada vez que llega un paquete ESPNOW
 // API actual: esp_now_register_recv_cb usa esp_now_recv_info_t como primer argumento
 void onVote(const esp_now_recv_info *info, const uint8_t *incomingData, int len) {
   (void)info; // El MAC está en info->src_addr si lo necesitas
-  if (!aceptarVotos) {
-    return;
-  }
   if (len != sizeof(VotoPacket)) {
     return;
   }
@@ -73,18 +58,11 @@ void configESPNOW() {
   // Registrar peer broadcast para enviar comandos a los controles
   esp_now_peer_info_t peer = {};
   memcpy(peer.peer_addr, broadcastAddress, 6);
-  peer.channel = PRIMARY_CHANNEL;
+  peer.channel = WIFI_CHANNEL;
   peer.encrypt = false;
   if (!esp_now_is_peer_exist(broadcastAddress)) {
     esp_now_add_peer(&peer);
   }
-}
-
-void fijarCanal(uint8_t canal) {
-  esp_wifi_set_promiscuous(true);
-  esp_wifi_set_channel(canal, WIFI_SECOND_CHAN_NONE);
-  esp_wifi_set_promiscuous(false);
-  canalActual = canal;
 }
 
 void enviarComando(uint8_t cmd) {
@@ -118,46 +96,11 @@ void loop() {
     cmd.toUpperCase();
 
     if (cmd == "START") {
-      aceptarVotos = true;
-      stopBurstActivo = false;
-      fijarCanal(PRIMARY_CHANNEL);
-      siguienteCambioCanal = millis() + CHANNEL_SWITCH_MS;
-      if (receptorEnSilencio) {
-        esp_now_register_recv_cb(onVote);
-        receptorEnSilencio = false;
-      }
       enviarComando(1);
       Serial.println("▶️  Comando START reenviado a controles (burst)");
     } else if (cmd == "STOP") {
-      aceptarVotos = false;
-      fijarCanal(PRIMARY_CHANNEL);
-      if (!receptorEnSilencio) {
-        esp_now_unregister_recv_cb();
-        receptorEnSilencio = true;
-      }
-      stopBurstActivo = true;
-      stopBurstHasta = millis() + STOP_BURST_MS;
-      siguienteStopEnvio = 0;
-      Serial.println("⏹️  Comando STOP en ráfagas extendidas");
-    }
-  }
-
-  if (aceptarVotos && DUAL_CHANNEL && !receptorEnSilencio) {
-    unsigned long ahora = millis();
-    if (ahora >= siguienteCambioCanal) {
-      uint8_t nuevoCanal = (canalActual == PRIMARY_CHANNEL) ? SECONDARY_CHANNEL : PRIMARY_CHANNEL;
-      fijarCanal(nuevoCanal);
-      siguienteCambioCanal = ahora + CHANNEL_SWITCH_MS;
-    }
-  }
-
-  if (stopBurstActivo) {
-    unsigned long ahora = millis();
-    if (ahora >= stopBurstHasta) {
-      stopBurstActivo = false;
-    } else if (ahora >= siguienteStopEnvio) {
       enviarComando(0);
-      siguienteStopEnvio = ahora + STOP_INTERVALO_MS;
+      Serial.println("⏹️  Comando STOP reenviado a controles (burst)");
     }
   }
 }
