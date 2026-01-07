@@ -2,8 +2,10 @@
 #include <esp_now.h>
 #include <esp_wifi.h>
 
-// Canal WiFi fijo para ESPNOW (ajusta según tu entorno)
-const uint8_t WIFI_CHANNEL = 6;
+// Canales WiFi para ESPNOW (ajusta según tu entorno)
+const uint8_t PRIMARY_CHANNEL = 6;
+const uint8_t SECONDARY_CHANNEL = 1;
+const bool DUAL_CHANNEL = true;
 
 // Dirección broadcast para enviar comandos a todos los controles
 const uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -42,7 +44,7 @@ void onVote(const esp_now_recv_info *info, const uint8_t *incomingData, int len)
 void configESPNOW() {
   // Fijar canal antes de inicializar ESPNOW
   esp_wifi_set_promiscuous(true);
-  esp_wifi_set_channel(WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
+  esp_wifi_set_channel(PRIMARY_CHANNEL, WIFI_SECOND_CHAN_NONE);
   esp_wifi_set_promiscuous(false);
 
   if (esp_now_init() != ESP_OK) {

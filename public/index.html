@@ -66,6 +66,7 @@
         let votosNO = 0;
         let votosAB = 0;
         let idsVotaron = new Set(); // Para evitar votos dobles
+        let graficaBloqueada = false;
 
         // Configuración de la Gráfica
         const ctx = document.getElementById('miGrafica').getContext('2d');
@@ -109,15 +110,17 @@
             log(`✅ Voto recibido del ID: ${data.id} (valor ${data.voto})`);
         });
 
-        function actualizarUI() {
+        function actualizarUI(forzarGrafica = false) {
             // Actualizar números
             document.getElementById('count-si').innerText = votosSI;
             document.getElementById('count-no').innerText = votosNO;
             document.getElementById('count-ab').innerText = votosAB;
 
             // Actualizar gráfica
-            chart.data.datasets[0].data = [votosSI, votosNO, votosAB];
-            chart.update();
+            if (!graficaBloqueada || forzarGrafica) {
+                chart.data.datasets[0].data = [votosSI, votosNO, votosAB];
+                chart.update();
+            }
         }
 
         async function resetear() {
@@ -131,7 +134,8 @@
                 votosNO = 0;
                 votosAB = 0;
                 idsVotaron.clear();
-                actualizarUI();
+                graficaBloqueada = false;
+                actualizarUI(true);
 
                 document.getElementById('estado-log').innerText = 'Historial borrado. Registrando solo la última votación.';
                 log("🔄 Votación reiniciada y log en servidor limpiado");
@@ -142,12 +146,15 @@
 
         function iniciarRafaga() {
             socket.emit('start-flood');
+            graficaBloqueada = true;
             document.getElementById('estado-control').innerText = 'Solicitando inicio de ráfaga...';
             log('🚀 Comando START enviado a los controles');
         }
 
         function detenerRafaga() {
             socket.emit('stop-flood');
+            graficaBloqueada = false;
+            actualizarUI(true);
             document.getElementById('estado-control').innerText = 'Solicitando detención de ráfaga...';
             log('⏹️  Comando STOP enviado a los controles');
         }
